@@ -1,0 +1,155 @@
+#!/bin/bash
+# Script to send long running process and send separate mail to different user.
+#
+
+# Assigning a variable in AWK as D=2, if D is greater than the second column field of UID ( 100 ) then ignore.
+# one more AWK is to just take the date from AWK and print only the DATE.
+
+ ps -eo etime,uid,pid,user:20,args | awk '($2 >= 100)' | grep -v aravind | awk -v D=2 -F'-' '{if($1 > D) print $0}'  | sort -nr > /home/imdcsup/count/process_count
+
+FILE=/home/count/process_count
+EMAIL_HTML=/home/count/mail_default_critical.html
+rm view2
+HTML_FILE=/home/count/critical.html
+wget https://XXXX/confluence/plugins/viewstorage/viewpagestorage.action?pageId=123070566
+
+#wget https://XXXXXXX/confluence/plugins/viewstorage/viewpagestorage.action?pageId=242226974
+
+mv viewpagestorage.action?pageId=123070566 /home/imdcsup/count/view2
+for i in $(cat $FILE | awk '{print $4}' | sort | uniq)
+do
+user_id=`echo $i`
+joining_ID=`/opt/pbis/bin/find-user-by-name --level 2 $user_id | grep -w UPN | cut -d':' -f2 | head -n 1`
+service_account=`/opt/pbis/bin/find-user-by-name --level 2 $user_id | grep -ic ServiceAccounts`
+email_to=`grep -wEA1 $user_id /home/imdcsup/count/view2 |head -2|sed -e 's/<[^>]*>//g; s/\&lt//g; s/&gt//g;'|egrep -E -o "\b[a-zA-Z0-9_.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+\b"|tr '\n' ','|sed 's/,$//';echo ""`
+if [ "$service_account" -eq 1 ] && [ ! -z "$email_to" ]
+then
+grep "$user_id" $FILE > /home/count/count_one
+send_email(){
+(
+echo "To: XXXXX"
+echo "CC: XXXXXXX"
+echo "From:  Hello"
+echo "MIME-Version: 1.0"
+echo "Content-Disposition: inline"
+echo "Subject: Long running process count in report - `hostname` "
+echo "Content-Type: text/html"
+echo "<font size="3" color="black">Hi Team,</br></br>Below your processes are running for more than 2 days. Kindly take necessary action if it is not expected to run longer. </br></br>Kindly reach out to Operations team
+if it is expected behavior with justification to avoid this mail communication.</br></br></font>"
+)
+}
+
+send_email > $EMAIL_HTML
+echo "<table border=1>" > $HTML_FILE
+echo "<TR bgcolor=#33B3FF><TH colspan=4>Long running process for more than 2 days</TH></TR>" >> $HTML_FILE
+echo "TR bgcolor=#33B3FF><TH colspan=1>Days</TH><TH colspan=1>User</TH><TH colspan=1>Process_ID</TH><TH colspan=1>Command</TH></TR>" >> $HTML_FILE
+
+
+while read line
+do
+
+days=`echo $line | awk '{print $1}' | cut -d'-' -f1`
+user=`echo $line | awk '{print $4}'`
+process_id=`echo $line | awk '{print $3}'`
+command=`echo $line  | awk '{for(i=5;i<=NF;++i)print $i}' `
+
+echo -e "<tr bgcolor=#FFFFF>">> $HTML_FILE;
+echo -e "<td><center> $days</center></td>" >> $HTML_FILE;
+echo -e "<td> <center>$user</center></td>" >> $HTML_FILE;
+echo -e "<td><center>$process_id</center></td>">> $HTML_FILE;
+echo -e "<td> $command</td> " >> $HTML_FILE;
+
+done < /home/count/count_one
+
+ echo "</table>" >> $HTML_FILE; echo "<font size="3" color="black"></br>Thank you,</br> Operations Team</font>" >> $HTML_FILE;
+
+ cat $HTML_FILE >> $EMAIL_HTML
+cat $EMAIL_HTML | /usr/sbin/sendmail -t
+
+
+elif [[ "$service_account" -eq "1" ]] && [[ -z "$email_to" ]]
+then
+
+grep $user_id $FILE  > /home/imdcsup/count/count_two
+send_email(){
+(
+echo "To: XXXXX"
+echo "CC: XXXXXXX"
+echo "From:  Hello"
+echo "MIME-Version: 1.0"
+echo "Content-Disposition: inline"
+echo "Subject: Long running process count in report - `hostname` "
+echo "Content-Type: text/html"
+echo "<font size="3" color="black">Hi Team,</br></br>Below your processes are running for more than 2 days. Kindly take necessary action if it is not expected to run longer. </br></br>Please advise the concerned team as the contact details are not found in the confluence page.</br></br></font>"
+)
+}
+
+send_email > $EMAIL_HTML
+echo "<table border=1>" > $HTML_FILE
+echo "<TR bgcolor=#33B3FF><TH colspan=4>Long running process for more than 2 days</TH></TR>" >> $HTML_FILE
+echo "TR bgcolor=#33B3FF><TH colspan=1>Days</TH><TH colspan=1>User</TH><TH colspan=1>Process_ID</TH><TH colspan=1>Command</TH></TR>" >> $HTML_FILE
+
+while read line
+do
+
+days=`echo $line | awk '{print $1}' | cut -d'-' -f1`
+user=`echo $line | awk '{print $4}'`
+process_id=`echo $line | awk '{print $3}'`
+command=`echo $line  | awk '{for(i=5;i<=NF;++i)print $i}' `
+
+echo -e "<tr bgcolor=#FFFFFF>">> $HTML_FILE;
+echo -e "<td><center>$days</center></td>" >> $HTML_FILE;
+echo -e "<td><center> $user</center></td>" >> $HTML_FILE;
+echo -e "<td><center>$process_id</center></td>">> $HTML_FILE;
+echo -e "<td> $command</td> " >> $HTML_FILE;
+
+done < /home/imdcsup/count/count_two
+
+ echo "</table>" >> $HTML_FILE; echo "<font size="3" color="black"></br>Thank you,</br>IMDP Hadoop Infra Operations</font>" >> $HTML_FILE;
+
+ cat $HTML_FILE >> $EMAIL_HTML
+cat $EMAIL_HTML | /usr/sbin/sendmail -t
+
+else
+grep $user_id $FILE > /home/imdcsup/count/count_three
+
+send_email(){
+(
+echo "To: XXXXX"
+echo "CC: XXXXXXX"
+echo "From:  Hello"
+echo "MIME-Version: 1.0"
+echo "Content-Disposition: inline"
+echo "Subject: Long running process count in report - `hostname` "
+echo "Content-Type: text/html"
+echo "<font size="3" color="black">Hi Team,</br></br>Below your processes are running for more than 2 days. Kindly take necessary action if it is not expected to run longer. </br></br>Kindly reach out to Operations team if it is expected behavior with justification to avoid this mail communication.</br></br></font>"
+)
+}
+
+send_email > $EMAIL_HTML
+echo "<table border=1>" > $HTML_FILE
+echo "<TR bgcolor=#33B3FF><TH colspan=4>Long running process for more than 2 days</TH></TR>" >> $HTML_FILE
+echo "TR bgcolor=#33B3FF><TH colspan=1>Days</TH><TH colspan=1>User</TH><TH colspan=1>Process_ID</TH><TH colspan=1>Command</TH></TR>" >> $HTML_FILE
+
+while read line
+do
+
+days=`echo $line | awk '{print $1}' | cut -d'-' -f1`
+user=`echo $line | awk '{print $4}'`
+process_id=`echo $line | awk '{print $3}'`
+command=`echo $line  | awk '{for(i=5;i<=NF;++i)print $i}' `
+
+echo -e "<tr bgcolor=#FFFFFF">> $HTML_FILE;
+echo -e "<td><center> $days</center></td>" >> $HTML_FILE;
+echo -e "<td><center> $user</center></td>" >> $HTML_FILE;
+echo -e "<td><center>$process_id</center></td>">> $HTML_FILE;
+echo -e "<td> $command</td> " >> $HTML_FILE;
+
+done < /home/count/count_three
+
+ echo "</table>" >> $HTML_FILE; echo "<font size="3" color="black"></br>Thank you,</br> Operations Team</font>" >> $HTML_FILE;
+
+ cat $HTML_FILE >> $EMAIL_HTML
+cat $EMAIL_HTML | /usr/sbin/sendmail -t
+fi
+done
